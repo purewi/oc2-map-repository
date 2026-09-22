@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oc2-map-bot"
+version = "0.6.0"
+description = "NapCatQQ/NoneBot2 based Overcooked! 2 custom map auto downloader"
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+  "nonebot2[fastapi]==2.5.0",
+  "nonebot-adapter-onebot==2.4.6",
+  "httpx>=0.28.1,<1.0",
+  "pydantic>=2.11,<3.0",
+  "pydantic-settings>=2.10,<3.0",
+  "PyYAML>=6.0.2,<7.0",
+  "SQLAlchemy>=2.0.41,<3.0",
+  "aiosqlite>=0.21,<1.0",
+  "loguru>=0.7.3,<1.0",
+  "Pillow>=11.3,<13.0",
+  "PySide6>=6.9,<7.0",
+  "Send2Trash>=1.8.3,<2.0",
+  "UnityPy>=1.25,<2.0",
+  "cos-python-sdk-v5>=1.9,<2.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.4,<10.0", "pytest-asyncio>=1.1,<2.0", "ruff>=0.12,<1.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["client*", "config*", "database*", "models*", "plugins*", "publisher*", "qq_api*", "services*", "storage*", "utils*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.nonebot]
+plugin_dirs = ["plugins"]
+builtin_plugins = []

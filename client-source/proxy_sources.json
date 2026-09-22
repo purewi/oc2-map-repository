@@ -1,0 +1,32 @@
+[
+  {
+    "name": "ghfast.top",
+    "urlTemplate": "https://ghfast.top/{url}",
+    "enabled": true
+  },
+  {
+    "name": "ghproxy.net",
+    "urlTemplate": "https://ghproxy.net/{url}",
+    "enabled": true
+  },
+  {
+    "name": "gh-proxy.org",
+    "urlTemplate": "https://gh-proxy.org/{url}",
+    "enabled": false
+  },
+  {
+    "name": "githubcdn.com",
+    "urlTemplate": "https://githubcdn.com/{url}",
+    "enabled": false
+  },
+  {
+    "name": "gh.wzdi.cn",
+    "urlTemplate": "https://gh.wzdi.cn/{url}",
+    "enabled": false
+  },
+  {
+    "name": "GitHub Direct",
+    "urlTemplate": "{url}",
+    "enabled": true
+  }
+]
