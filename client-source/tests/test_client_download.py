@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import zipfile
 from pathlib import Path
 
 import httpx
 import pytest
 
-from client.download_manager import DownloadError, DownloadManager
+from client.download_manager import DownloadError, DownloadManager, _Candidate
 from client.download_sources import DownloadSourceManager
 from publisher.models import MapMetadata
 
@@ -217,3 +218,91 @@ def test_public_client_ignores_cos_url(tmp_path: Path) -> None:
     )
     assert manager.download(item).read_bytes() == payload
     assert seen == ["proxy.test"]
+
+
+def test_existing_partial_file_is_resumed_with_http_range(tmp_path: Path) -> None:
+    payload = zip_payload(b"resume payload" * 1000)
+    item = metadata(payload)
+    partial_size = len(payload) // 3
+    part = tmp_path / "downloads" / f"{item.id}_{item.version}.zip.part"
+    part.parent.mkdir(parents=True)
+    part.write_bytes(payload[:partial_size])
+    ranges = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        ranges.append(request.headers.get("range"))
+        return httpx.Response(
+            206,
+            content=payload[partial_size:],
+            headers={
+                "Content-Length": str(len(payload) - partial_size),
+                "Content-Range": (
+                    f"bytes {partial_size}-{len(payload) - 1}/{len(payload)}"
+                ),
+            },
+        )
+
+    manager = DownloadManager(
+        tmp_path,
+        retries=1,
+        transport=httpx.MockTransport(handler),
+        source_manager=_sources(tmp_path),
+    )
+    assert manager.download(item).read_bytes() == payload
+    assert ranges == [f"bytes={partial_size}-"]
+
+
+def test_probe_results_can_move_github_direct_ahead_of_slow_proxy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = DownloadManager(tmp_path, source_manager=_sources(tmp_path))
+    candidates = [
+        _Candidate("proxy", "https://proxy.test/map.zip", False),
+        _Candidate("GitHub Direct", "https://github.com/map.zip", False),
+    ]
+
+    def probe(candidate, expected_size):
+        del expected_size
+        return ((8 if candidate.name == "GitHub Direct" else 1) * 1024 * 1024, True)
+
+    monkeypatch.setattr(manager, "_probe_candidate", probe)
+    ranked = manager._rank_candidates(candidates, 20 * 1024 * 1024)
+    assert [item.name for item in ranked] == ["GitHub Direct", "proxy"]
+
+
+def test_large_range_download_uses_four_resumable_segments(tmp_path: Path) -> None:
+    payload = zip_payload(b"x" * (17 * 1024 * 1024))
+    ranges = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        value = request.headers["range"]
+        ranges.append(value)
+        match = re.fullmatch(r"bytes=(\d+)-(\d+)", value)
+        assert match is not None
+        start, end = (int(part) for part in match.groups())
+        return httpx.Response(
+            206,
+            content=payload[start : end + 1],
+            headers={
+                "Content-Length": str(end - start + 1),
+                "Content-Range": f"bytes {start}-{end}/{len(payload)}",
+            },
+        )
+
+    manager = DownloadManager(
+        tmp_path,
+        transport=httpx.MockTransport(handler),
+    )
+    part = tmp_path / "downloads" / "parallel.zip.part"
+    manager._download_segmented(
+        asset_id="parallel-test",
+        candidate=_Candidate(
+            "range-source", "https://range.test/map.zip", False, True
+        ),
+        expected_size=len(payload),
+        part=part,
+        progress=None,
+    )
+
+    assert part.read_bytes() == payload
+    assert len(ranges) == 4
